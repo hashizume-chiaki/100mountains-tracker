@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light">
+  <title>日本百名山 進捗トラッカー</title>
+  <style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root { color-scheme: light; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+  background: #f4f7f5;
+  color: #1a2e23;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+header {
+  position: sticky; top: 0; z-index: 102;
+  background: #2d6a4f; color: #fff;
+  box-shadow: 0 2px 6px rgba(0,0,0,.2);
+}
+.header-main {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px; gap: 12px;
+}
+header h1 { font-size: 1.2rem; font-weight: 700; white-space: nowrap; }
+.header-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+#progress-info { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+#progress-text { font-size: 0.8rem; opacity: .9; white-space: nowrap; }
+#progress-bar { width: 120px; height: 6px; background: rgba(255,255,255,.3); border-radius: 3px; overflow: hidden; }
+#progress-fill { height: 100%; background: #52b788; border-radius: 3px; transition: width .4s ease; }
+.icon-btn {
+  background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.3);
+  color: #fff; border-radius: 6px; width: 36px; height: 36px;
+  font-size: 1rem; cursor: pointer; flex-shrink: 0;
+}
+.icon-btn:hover { background: rgba(255,255,255,.25); }
+
+#sync-banner { padding: 6px 16px; font-size: 0.8rem; text-align: center; background: rgba(0,0,0,.2); color: #fff; }
+#sync-banner.error   { background: #c0392b; }
+#sync-banner.success { background: #27ae60; }
+#sync-banner.hidden  { display: none; }
+
+#settings-panel {
+  background: #fff; border-bottom: 1px solid #d1d9d3;
+  overflow: hidden; max-height: 0; transition: max-height .3s ease;
+}
+#settings-panel.visible { max-height: 600px; }
+#settings-panel.hidden  { display: block; }
+.settings-inner { padding: 20px; max-width: 560px; }
+.settings-inner h2 { font-size: 1rem; margin-bottom: 8px; color: #2d6a4f; }
+.settings-note { font-size: 0.82rem; color: #6b8277; margin-bottom: 16px; line-height: 1.6; }
+.settings-fields { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.settings-fields label { display: flex; flex-direction: column; gap: 4px; font-size: 0.82rem; font-weight: 600; color: #1a2e23; }
+.settings-fields input {
+  padding: 7px 10px; border: 1px solid #d1d9d3; border-radius: 6px;
+  font-size: 0.9rem; width: 100%; background: #fff; color: #1a2e23;
+}
+.settings-fields input:focus { outline: none; border-color: #52b788; }
+.settings-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.settings-actions button {
+  padding: 7px 14px; border-radius: 6px; border: none;
+  cursor: pointer; font-size: 0.85rem; font-weight: 600;
+  background: #2d6a4f; color: #fff;
+}
+.settings-actions button:disabled { opacity: .45; cursor: default; }
+.settings-actions button:not(:disabled):hover { opacity: .85; }
+.settings-actions button.secondary { background: #f4f7f5; color: #1a2e23; border: 1px solid #d1d9d3; }
+.settings-actions button.secondary:hover { background: #d1d9d3; }
+#settings-status { margin-top: 10px; font-size: 0.82rem; min-height: 18px; }
+#settings-status.ok  { color: #155724; }
+#settings-status.err { color: #721c24; }
+
+#controls {
+  position: sticky; z-index: 101;
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px; background: #fff;
+  border-bottom: 1px solid #d1d9d3; flex-wrap: wrap;
+  box-shadow: 0 2px 4px rgba(0,0,0,.06);
+}
+#search-input {
+  flex: 1; min-width: 160px; padding: 7px 10px;
+  border: 1px solid #d1d9d3; border-radius: 6px;
+  font-size: 0.9rem; background: #fff; color: #1a2e23;
+}
+#search-input:focus { outline: none; border-color: #52b788; }
+.filter-check { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; cursor: pointer; white-space: nowrap; }
+.filter-check input[type="checkbox"] { width: 15px; height: 15px; accent-color: #2d6a4f; cursor: pointer; }
+
+#table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+#mountains-table { width: 100%; border-collapse: collapse; min-width: 600px; }
+#mountains-table thead {
+  background: #fff; border-bottom: 2px solid #52b788;
+  position: sticky; z-index: 10;
+}
+#mountains-table th {
+  padding: 10px 8px; text-align: left; font-size: 0.8rem;
+  font-weight: 700; color: #6b8277; white-space: nowrap;
+  border-bottom: 2px solid #52b788; user-select: none;
+}
+th[data-col] { cursor: pointer; }
+th[data-col]:hover { color: #2d6a4f; }
+th[data-col].sort-asc::after  { content: " ▲"; color: #2d6a4f; }
+th[data-col].sort-desc::after { content: " ▼"; color: #2d6a4f; }
+.col-id { width: 44px; } .col-elevation { width: 88px; }
+.col-prefecture { width: 100px; } .col-difficulty { width: 72px; text-align: center; }
+.col-climbed { width: 52px; text-align: center; } .col-date { width: 130px; }
+
+#mountains-table tbody tr { border-bottom: 1px solid #d1d9d3; background: #fff; }
+#mountains-table tbody tr:hover { background: #d8f3dc; }
+#mountains-table tbody tr.climbed { background: #edf7f0; }
+#mountains-table tbody tr.climbed:hover { background: #d8f0e3; }
+#mountains-table td { padding: 8px; font-size: 0.88rem; color: #1a2e23; }
+.td-id { color: #6b8277; font-size: 0.8rem; }
+.td-name { font-weight: 500; }
+.td-center { text-align: center; }
+
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.78rem; font-weight: 700; }
+.diff-A { background: #d4edda; color: #155724; }
+.diff-B { background: #cce5ff; color: #004085; }
+.diff-C { background: #fff3cd; color: #856404; }
+.diff-D { background: #f8d7da; color: #721c24; }
+.diff-E { background: #e2d9f3; color: #432874; }
+
+.climbed-check { width: 18px; height: 18px; accent-color: #2d6a4f; cursor: pointer; }
+.date-input {
+  border: 1px solid #d1d9d3; border-radius: 4px;
+  padding: 3px 6px; font-size: 0.82rem; width: 122px;
+  font-family: inherit; background: #fff; color: #1a2e23;
+}
+.date-input:focus { outline: none; border-color: #52b788; }
+.date-input:disabled { background: transparent; border-color: transparent; color: #6b8277; cursor: default; }
+
+#empty-state { text-align: center; padding: 40px; color: #6b8277; font-size: 0.9rem; }
+
+@media (max-width: 480px) {
+  .header-main { padding: 8px 12px; }
+  header h1 { font-size: 1rem; }
+  #progress-bar { width: 80px; }
+  .settings-actions { flex-direction: column; }
+  .settings-actions button { width: 100%; }
+}
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="header-main">
+      <h1>日本百名山</h1>
+      <div class="header-right">
+        <div id="progress-info">
+          <span id="progress-text">登頂済み: 0 / 100</span>
+          <div id="progress-bar"><div id="progress-fill" style="width:0%"></div></div>
+        </div>
+        <button id="settings-btn" class="icon-btn" title="同期設定">⚙</button>
+      </div>
+    </div>
+    <div id="sync-banner" class="hidden"></div>
+  </header>
+  <div id="controls">
+    <input type="text" id="search-input" placeholder="山名・都道府県で検索..." autocomplete="off">
+    <label class="filter-check">
+      <input type="checkbox" id="filter-unclimbed">
+      <span>未登頂のみ表示</span>
+    </label>
+  </div>
+
+  <div id="settings-panel" class="hidden">
+    <div class="settings-inner">
+      <h2>GitHub 同期設定</h2>
+      <p class="settings-note">
+        データをGitHubリポジトリに保存して、異なる端末間で同期します。<br>
+        <strong>contents: write</strong> 権限を持つ fine-grained Personal Access Token が必要です。
+      </p>
+      <div class="settings-fields">
+        <label><span>GitHubユーザー名</span><input type="text" id="owner-input" placeholder="your-github-username" autocomplete="off"></label>
+        <label><span>リポジトリ名</span><input type="text" id="repo-input" placeholder="hyakumeizan-tracker" autocomplete="off"></label>
+        <label><span>Personal Access Token</span><input type="password" id="pat-input" placeholder="github_pat_..." autocomplete="off"></label>
+      </div>
+      <div class="settings-actions">
+        <button id="save-settings-btn">保存して接続テスト</button>
+        <button id="sync-now-btn" disabled>今すぐ同期</button>
+        <button id="close-settings-btn" class="secondary">閉じる</button>
+      </div>
+      <div id="settings-status"></div>
+    </div>
+  </div>
+
+  <div id="table-wrapper">
+    <table id="mountains-table">
+      <thead>
+        <tr>
+          <th data-col="id" class="sort-asc col-id">#</th>
+          <th data-col="name" class="col-name">山名</th>
+          <th data-col="elevation" class="col-elevation">標高 (m)</th>
+          <th data-col="prefecture" class="col-prefecture">都道府県</th>
+          <th data-col="difficulty" class="col-difficulty">難易度</th>
+          <th data-col="climbed" class="col-climbed">登頂</th>
+          <th data-col="date" class="col-date">登頂日</th>
+        </tr>
+      </thead>
+      <tbody id="table-body"></tbody>
+    </table>
+  </div>
+
+  <script>
+// ─── Mountain Data ────────────────────────────────────────────────────────────
+const MOUNTAINS = [
+  // 北海道
+  { id:  1, name: "利尻山",                elevation: 1721, prefecture: "北海道",   difficulty: "B" },
+  { id:  2, name: "羅臼岳",                elevation: 1661, prefecture: "北海道",   difficulty: "C" },
+  { id:  3, name: "斜里岳",                elevation: 1547, prefecture: "北海道",   difficulty: "C" },
+  { id:  4, name: "阿寒岳（雌阿寒岳）",    elevation: 1499, prefecture: "北海道",   difficulty: "B" },
+  { id:  5, name: "大雪山（旭岳）",         elevation: 2291, prefecture: "北海道",   difficulty: "B" },
+  { id:  6, name: "トムラウシ山",           elevation: 2141, prefecture: "北海道",   difficulty: "C" },
+  { id:  7, name: "十勝岳",                elevation: 2077, prefecture: "北海道",   difficulty: "B" },
+  { id:  8, name: "幌尻岳",                elevation: 2052, prefecture: "北海道",   difficulty: "D" },
+  { id:  9, name: "後方羊蹄山",            elevation: 1898, prefecture: "北海道",   difficulty: "B" },
+  // 東北
+  { id: 10, name: "岩木山",                elevation: 1625, prefecture: "青森県",   difficulty: "B" },
+  { id: 11, name: "八甲田山（大岳）",       elevation: 1585, prefecture: "青森県",   difficulty: "B" },
+  { id: 12, name: "八幡平",                elevation: 1613, prefecture: "岩手県",   difficulty: "A" },
+  { id: 13, name: "岩手山",                elevation: 2038, prefecture: "岩手県",   difficulty: "B" },
+  { id: 14, name: "早池峰山",              elevation: 1917, prefecture: "岩手県",   difficulty: "C" },
+  { id: 15, name: "鳥海山",                elevation: 2236, prefecture: "秋田県",   difficulty: "C" },
+  { id: 16, name: "月山",                  elevation: 1984, prefecture: "山形県",   difficulty: "A" },
+  { id: 17, name: "朝日岳（大朝日岳）",    elevation: 1871, prefecture: "山形県",   difficulty: "B" },
+  { id: 18, name: "蔵王山（熊野岳）",       elevation: 1841, prefecture: "宮城県",   difficulty: "B" },
+  { id: 19, name: "飯豊山",                elevation: 2105, prefecture: "山形県",   difficulty: "C" },
+  { id: 20, name: "吾妻山（西吾妻山）",    elevation: 2035, prefecture: "山形県",   difficulty: "B" },
+  { id: 21, name: "安達太良山",            elevation: 1700, prefecture: "福島県",   difficulty: "B" },
+  { id: 22, name: "磐梯山",                elevation: 1816, prefecture: "福島県",   difficulty: "B" },
+  { id: 23, name: "会津駒ヶ岳",            elevation: 2133, prefecture: "福島県",   difficulty: "B" },
+  // 関東・越後
+  { id: 24, name: "那須岳（茶臼岳）",       elevation: 1915, prefecture: "栃木県",   difficulty: "A" },
+  { id: 25, name: "越後駒ヶ岳",            elevation: 2003, prefecture: "新潟県",   difficulty: "B" },
+  { id: 26, name: "平ヶ岳",                elevation: 2141, prefecture: "新潟県",   difficulty: "D" },
+  { id: 27, name: "巻機山",                elevation: 1967, prefecture: "新潟県",   difficulty: "B" },
+  { id: 28, name: "燧ヶ岳",                elevation: 2356, prefecture: "福島県",   difficulty: "B" },
+  { id: 29, name: "至仏山",                elevation: 2228, prefecture: "群馬県",   difficulty: "B" },
+  { id: 30, name: "谷川岳",                elevation: 1977, prefecture: "新潟県",   difficulty: "B" },
+  { id: 31, name: "雨飾山",                elevation: 1963, prefecture: "新潟県",   difficulty: "B" },
+  { id: 32, name: "苗場山",                elevation: 2145, prefecture: "新潟県",   difficulty: "B" },
+  { id: 33, name: "妙高山",                elevation: 2454, prefecture: "新潟県",   difficulty: "B" },
+  { id: 34, name: "火打山",                elevation: 2462, prefecture: "新潟県",   difficulty: "B" },
+  { id: 35, name: "高妻山",                elevation: 2353, prefecture: "新潟県",   difficulty: "D" },
+  { id: 36, name: "男体山",                elevation: 2486, prefecture: "栃木県",   difficulty: "B" },
+  { id: 37, name: "日光白根山",            elevation: 2578, prefecture: "栃木県",   difficulty: "B" },
+  { id: 38, name: "皇海山",                elevation: 2144, prefecture: "栃木県",   difficulty: "C" },
+  { id: 39, name: "武尊山",                elevation: 2158, prefecture: "群馬県",   difficulty: "B" },
+  { id: 40, name: "赤城山（黒檜山）",       elevation: 1828, prefecture: "群馬県",   difficulty: "B" },
+  { id: 41, name: "草津白根山（本白根山）", elevation: 2171, prefecture: "群馬県",   difficulty: "A" },
+  { id: 42, name: "四阿山",                elevation: 2354, prefecture: "群馬県",   difficulty: "B" },
+  { id: 43, name: "浅間山（前掛山）",       elevation: 2568, prefecture: "群馬県",   difficulty: "B" },
+  { id: 44, name: "筑波山",                elevation:  877, prefecture: "茨城県",   difficulty: "A" },
+  // 北アルプス
+  { id: 45, name: "白馬岳",                elevation: 2932, prefecture: "富山県",   difficulty: "B" },
+  { id: 46, name: "五竜岳",                elevation: 2814, prefecture: "富山県",   difficulty: "C" },
+  { id: 47, name: "鹿島槍ヶ岳",            elevation: 2889, prefecture: "富山県",   difficulty: "B" },
+  { id: 48, name: "剱岳",                  elevation: 2999, prefecture: "富山県",   difficulty: "E" },
+  { id: 49, name: "立山（大汝山）",         elevation: 3015, prefecture: "富山県",   difficulty: "B" },
+  { id: 50, name: "薬師岳",                elevation: 2926, prefecture: "富山県",   difficulty: "B" },
+  { id: 51, name: "黒部五郎岳",            elevation: 2840, prefecture: "富山県",   difficulty: "B" },
+  { id: 52, name: "水晶岳（黒岳）",         elevation: 2986, prefecture: "富山県",   difficulty: "C" },
+  { id: 53, name: "鷲羽岳",                elevation: 2924, prefecture: "富山県",   difficulty: "C" },
+  { id: 54, name: "槍ヶ岳",                elevation: 3180, prefecture: "長野県",   difficulty: "C" },
+  { id: 55, name: "穂高岳（奥穂高岳）",    elevation: 3190, prefecture: "長野県",   difficulty: "C" },
+  { id: 56, name: "常念岳",                elevation: 2857, prefecture: "長野県",   difficulty: "B" },
+  { id: 57, name: "笠ヶ岳",                elevation: 2898, prefecture: "岐阜県",   difficulty: "B" },
+  { id: 58, name: "焼岳",                  elevation: 2455, prefecture: "長野県",   difficulty: "B" },
+  { id: 59, name: "乗鞍岳",                elevation: 3026, prefecture: "長野県",   difficulty: "B" },
+  // 御嶽・長野中部
+  { id: 60, name: "御嶽山",                elevation: 3067, prefecture: "長野県",   difficulty: "B" },
+  { id: 61, name: "美ヶ原（王ヶ頭）",       elevation: 2034, prefecture: "長野県",   difficulty: "A" },
+  { id: 62, name: "霧ヶ峰（車山）",         elevation: 1925, prefecture: "長野県",   difficulty: "A" },
+  { id: 63, name: "蓼科山",                elevation: 2531, prefecture: "長野県",   difficulty: "B" },
+  { id: 64, name: "八ヶ岳（赤岳）",         elevation: 2899, prefecture: "長野県",   difficulty: "C" },
+  // 関東・奥秩父
+  { id: 65, name: "両神山",                elevation: 1723, prefecture: "埼玉県",   difficulty: "C" },
+  { id: 66, name: "雲取山",                elevation: 2017, prefecture: "埼玉県",   difficulty: "B" },
+  { id: 67, name: "甲武信ヶ岳",            elevation: 2475, prefecture: "埼玉県",   difficulty: "B" },
+  { id: 68, name: "金峰山",                elevation: 2599, prefecture: "長野県",   difficulty: "A" },
+  { id: 69, name: "瑞牆山",                elevation: 2230, prefecture: "山梨県",   difficulty: "C" },
+  { id: 70, name: "大菩薩嶺",              elevation: 2057, prefecture: "山梨県",   difficulty: "A" },
+  { id: 71, name: "丹沢山",                elevation: 1567, prefecture: "神奈川県", difficulty: "B" },
+  // 富士・伊豆
+  { id: 72, name: "富士山",                elevation: 3776, prefecture: "山梨県",   difficulty: "B" },
+  { id: 73, name: "天城山（万三郎岳）",    elevation: 1406, prefecture: "静岡県",   difficulty: "B" },
+  // 中央アルプス
+  { id: 74, name: "木曽駒ヶ岳",            elevation: 2956, prefecture: "長野県",   difficulty: "A" },
+  { id: 75, name: "空木岳",                elevation: 2864, prefecture: "長野県",   difficulty: "C" },
+  { id: 76, name: "恵那山",                elevation: 2191, prefecture: "長野県",   difficulty: "B" },
+  // 南アルプス
+  { id: 77, name: "甲斐駒ヶ岳",            elevation: 2967, prefecture: "山梨県",   difficulty: "C" },
+  { id: 78, name: "仙丈ヶ岳",              elevation: 3033, prefecture: "山梨県",   difficulty: "C" },
+  { id: 79, name: "鳳凰山（観音岳）",       elevation: 2841, prefecture: "山梨県",   difficulty: "B" },
+  { id: 80, name: "北岳",                  elevation: 3193, prefecture: "山梨県",   difficulty: "B" },
+  { id: 81, name: "間ノ岳",                elevation: 3190, prefecture: "山梨県",   difficulty: "C" },
+  { id: 82, name: "塩見岳",                elevation: 3052, prefecture: "長野県",   difficulty: "C" },
+  { id: 83, name: "荒川岳（悪沢岳）",       elevation: 3141, prefecture: "長野県",   difficulty: "D" },
+  { id: 84, name: "赤石岳",                elevation: 3121, prefecture: "長野県",   difficulty: "D" },
+  { id: 85, name: "聖岳",                  elevation: 3013, prefecture: "長野県",   difficulty: "C" },
+  { id: 86, name: "光岳",                  elevation: 2592, prefecture: "長野県",   difficulty: "B" },
+  // 白山・北陸
+  { id: 87, name: "白山（御前峰）",         elevation: 2702, prefecture: "石川県",   difficulty: "C" },
+  { id: 88, name: "荒島岳",                elevation: 1523, prefecture: "福井県",   difficulty: "B" },
+  // 近畿
+  { id: 89, name: "伊吹山",                elevation: 1377, prefecture: "滋賀県",   difficulty: "A" },
+  { id: 90, name: "大台ヶ原山（日出ヶ岳）", elevation: 1695, prefecture: "三重県",   difficulty: "A" },
+  { id: 91, name: "大峰山（八経ヶ岳）",    elevation: 1915, prefecture: "奈良県",   difficulty: "B" },
+  // 中国・四国
+  { id: 92, name: "大山（弥山）",           elevation: 1729, prefecture: "鳥取県",   difficulty: "B" },
+  { id: 93, name: "剣山",                  elevation: 1955, prefecture: "徳島県",   difficulty: "A" },
+  { id: 94, name: "石鎚山",                elevation: 1982, prefecture: "愛媛県",   difficulty: "B" },
+  // 九州
+  { id: 95, name: "九重山（中岳）",         elevation: 1791, prefecture: "大分県",   difficulty: "B" },
+  { id: 96, name: "祖母山",                elevation: 1756, prefecture: "大分県",   difficulty: "B" },
+  { id: 97, name: "阿蘇山（高岳）",         elevation: 1592, prefecture: "熊本県",   difficulty: "B" },
+  { id: 98, name: "霧島山（韓国岳）",       elevation: 1700, prefecture: "宮崎県",   difficulty: "B" },
+  { id: 99, name: "開聞岳",                elevation:  924, prefecture: "鹿児島県", difficulty: "B" },
+  { id:100, name: "宮之浦岳",              elevation: 1936, prefecture: "鹿児島県", difficulty: "C" },
+];
+
+// ─── State ───────────────────────────────────────────────────────────────────
+let progress = {};
+let currentSha = null;
+let sortState = { col: 'id', dir: 'asc' };
+let filterText = '';
+let filterUnclimbed = false;
+let saveTimer = null;
+let isSaving = false;
+
+// ─── GitHub API ───────────────────────────────────────────────────────────────
+const GH_API = 'https://api.github.com';
+
+function ghConfig() {
+  return {
+    pat:   localStorage.getItem('gh_pat')   || '',
+    owner: localStorage.getItem('gh_owner') || '',
+    repo:  localStorage.getItem('gh_repo')  || '',
+    path:  'data/progress.json',
+  };
+}
+
+function ghHeaders(cfg) {
+  return {
+    'Authorization': `Bearer ${cfg.pat}`,
+    'Accept': 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+    'Content-Type': 'application/json',
+  };
+}
+
+async function fetchProgress() {
+  const cfg = ghConfig();
+  if (!cfg.pat || !cfg.owner || !cfg.repo) return false;
+  const url = `${GH_API}/repos/${cfg.owner}/${cfg.repo}/contents/${cfg.path}`;
+  try {
+    const res = await fetch(url, { headers: ghHeaders(cfg) });
+    if (res.status === 404) { currentSha = null; return true; }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    currentSha = data.sha;
+    const json = JSON.parse(decodeURIComponent(escape(atob(data.content.replace(/\n/g, '')))));
+    progress = json.entries || {};
+    return true;
+  } catch (e) {
+    console.error('fetchProgress:', e);
+    return false;
+  }
+}
+
+async function saveProgress() {
+  const cfg = ghConfig();
+  if (!cfg.pat || !cfg.owner || !cfg.repo) return;
+  if (isSaving) { scheduleAutoSave(200); return; }
+  isSaving = true;
+  showBanner('同期中...', '');
+  const payload = { version: 1, lastUpdated: new Date().toISOString(), entries: progress };
+  const content = btoa(unescape(encodeURIComponent(JSON.stringify(payload, null, 2))));
+  const body = { message: 'chore: update climbing progress [skip ci]', content, ...(currentSha ? { sha: currentSha } : {}) };
+  const url = `${GH_API}/repos/${cfg.owner}/${cfg.repo}/contents/${cfg.path}`;
+  try {
+    const res = await fetch(url, { method: 'PUT', headers: ghHeaders(cfg), body: JSON.stringify(body) });
+    if (res.status === 409) { await fetchProgress(); isSaving = false; scheduleAutoSave(100); return; }
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || `HTTP ${res.status}`); }
+    const result = await res.json();
+    currentSha = result.content.sha;
+    showBanner('同期完了 ✓', 'success');
+    setTimeout(hideBanner, 2500);
+  } catch (e) {
+    console.error('saveProgress:', e);
+    showBanner(`同期失敗: ${e.message}`, 'error');
+  } finally {
+    isSaving = false;
+  }
+}
+
+function scheduleAutoSave(delay = 800) {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveProgress, delay);
+}
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+async function testConnection() {
+  const cfg = ghConfig();
+  if (!cfg.pat || !cfg.owner || !cfg.repo) return false;
+  try {
+    const res = await fetch(`${GH_API}/repos/${cfg.owner}/${cfg.repo}`, { headers: ghHeaders(cfg) });
+    return res.ok;
+  } catch { return false; }
+}
+
+document.getElementById('save-settings-btn').addEventListener('click', async () => {
+  const owner = document.getElementById('owner-input').value.trim();
+  const repo  = document.getElementById('repo-input').value.trim();
+  const pat   = document.getElementById('pat-input').value.trim();
+  const statusEl = document.getElementById('settings-status');
+  if (!owner || !repo || !pat) { setStatus(statusEl, '全てのフィールドを入力してください', 'err'); return; }
+  localStorage.setItem('gh_owner', owner);
+  localStorage.setItem('gh_repo', repo);
+  localStorage.setItem('gh_pat', pat);
+  setStatus(statusEl, '接続テスト中...', '');
+  document.getElementById('save-settings-btn').disabled = true;
+  const ok = await testConnection();
+  document.getElementById('save-settings-btn').disabled = false;
+  if (ok) {
+    setStatus(statusEl, '接続成功 ✓ データを読み込んでいます...', 'ok');
+    document.getElementById('sync-now-btn').disabled = false;
+    const fetched = await fetchProgress();
+    setStatus(statusEl, fetched ? '接続成功 ✓ データを読み込みました' : '接続成功 ✓（データファイルはまだありません）', 'ok');
+    renderTable(); updateProgressBar();
+  } else {
+    setStatus(statusEl, '接続失敗 — ユーザー名・リポジトリ名・Tokenを確認してください', 'err');
+    document.getElementById('sync-now-btn').disabled = true;
+  }
+});
+
+document.getElementById('sync-now-btn').addEventListener('click', async () => {
+  const ok = await fetchProgress();
+  if (ok) { renderTable(); updateProgressBar(); showBanner('同期完了 ✓', 'success'); setTimeout(hideBanner, 2500); }
+  else showBanner('同期失敗', 'error');
+});
+
+document.getElementById('settings-btn').addEventListener('click', () => {
+  const p = document.getElementById('settings-panel');
+  p.classList.toggle('visible');
+  p.classList.remove('hidden');
+});
+
+document.getElementById('close-settings-btn').addEventListener('click', () => {
+  document.getElementById('settings-panel').classList.remove('visible');
+});
+
+// ─── Sort / Filter ────────────────────────────────────────────────────────────
+const COMPARATORS = {
+  id:         (a, b) => a.id - b.id,
+  name:       (a, b) => a.name.localeCompare(b.name, 'ja'),
+  elevation:  (a, b) => a.elevation - b.elevation,
+  prefecture: (a, b) => a.prefecture.localeCompare(b.prefecture, 'ja'),
+  difficulty: (a, b) => a.difficulty.localeCompare(b.difficulty),
+  climbed:    (a, b) => (progress[a.id]?.climbed ? 1 : 0) - (progress[b.id]?.climbed ? 1 : 0),
+  date:       (a, b) => (progress[a.id]?.date || '').localeCompare(progress[b.id]?.date || ''),
+};
+
+document.querySelectorAll('th[data-col]').forEach(th => {
+  th.addEventListener('click', () => {
+    const col = th.dataset.col;
+    sortState.dir = (sortState.col === col && sortState.dir === 'asc') ? 'desc' : 'asc';
+    sortState.col = col;
+    renderTable();
+  });
+});
+
+function getSortedFiltered() {
+  const q = filterText.toLowerCase();
+  return MOUNTAINS
+    .filter(m => {
+      if (filterUnclimbed && progress[m.id]?.climbed) return false;
+      if (q && !m.name.includes(q) && !m.prefecture.includes(q)) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      const cmp = COMPARATORS[sortState.col](a, b);
+      return sortState.dir === 'asc' ? cmp : -cmp;
+    });
+}
+
+document.getElementById('search-input').addEventListener('input', e => { filterText = e.target.value.trim(); renderTable(); });
+document.getElementById('filter-unclimbed').addEventListener('change', e => { filterUnclimbed = e.target.checked; renderTable(); });
+
+// ─── Render ───────────────────────────────────────────────────────────────────
+function renderTable() {
+  document.querySelectorAll('th[data-col]').forEach(th => {
+    th.classList.remove('sort-asc', 'sort-desc');
+    if (th.dataset.col === sortState.col) th.classList.add(`sort-${sortState.dir}`);
+  });
+
+  const tbody = document.getElementById('table-body');
+  const data = getSortedFiltered();
+
+  if (data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7"><div id="empty-state">該当する山がありません</div></td></tr>';
+    return;
+  }
+
+  const frag = document.createDocumentFragment();
+  for (const m of data) {
+    const p = progress[m.id] || {};
+    const climbed = !!p.climbed;
+    const date = p.date || '';
+    const tr = document.createElement('tr');
+    if (climbed) tr.className = 'climbed';
+    tr.innerHTML =
+      `<td class="td-id td-center">${m.id}</td>` +
+      `<td class="td-name">${esc(m.name)}</td>` +
+      `<td>${m.elevation.toLocaleString('ja-JP')}</td>` +
+      `<td>${esc(m.prefecture)}</td>` +
+      `<td class="td-center"><span class="badge diff-${m.difficulty}">${m.difficulty}</span></td>` +
+      `<td class="td-center"><input type="checkbox" class="climbed-check" data-id="${m.id}"${climbed ? ' checked' : ''}></td>` +
+      `<td><input type="date" class="date-input" data-id="${m.id}" value="${esc(date)}"${!climbed ? ' disabled' : ''}></td>`;
+    frag.appendChild(tr);
+  }
+  tbody.innerHTML = '';
+  tbody.appendChild(frag);
+}
+
+function updateProgressBar() {
+  const done = MOUNTAINS.filter(m => progress[m.id]?.climbed).length;
+  document.getElementById('progress-text').textContent = `登頂済み: ${done} / ${MOUNTAINS.length}`;
+  document.getElementById('progress-fill').style.width = `${(done / MOUNTAINS.length * 100).toFixed(1)}%`;
+}
+
+document.getElementById('table-body').addEventListener('change', e => {
+  const el = e.target;
+  const id = Number(el.dataset.id);
+  if (!id) return;
+  if (!progress[id]) progress[id] = {};
+  if (el.type === 'checkbox') {
+    progress[id].climbed = el.checked;
+    if (!el.checked) progress[id].date = null;
+    renderTable(); updateProgressBar(); scheduleAutoSave();
+  } else if (el.type === 'date') {
+    progress[id].date = el.value || null;
+    scheduleAutoSave();
+  }
+});
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function showBanner(msg, type) {
+  const b = document.getElementById('sync-banner');
+  b.textContent = msg; b.className = type || ''; b.classList.remove('hidden');
+}
+function hideBanner() { document.getElementById('sync-banner').classList.add('hidden'); }
+function setStatus(el, msg, cls) { el.textContent = msg; el.className = cls; }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ─── Sticky offsets ───────────────────────────────────────────────────────────
+function updateStickyTops() {
+  const headerH   = document.querySelector('header').offsetHeight;
+  const controls  = document.getElementById('controls');
+  controls.style.top = headerH + 'px';
+  const controlsH = controls.offsetHeight;
+  document.querySelector('#mountains-table thead').style.top = (headerH + controlsH) + 'px';
+}
+window.addEventListener('resize', updateStickyTops);
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+async function init() {
+  const owner = localStorage.getItem('gh_owner') || '';
+  const repo  = localStorage.getItem('gh_repo')  || '';
+  const pat   = localStorage.getItem('gh_pat')   || '';
+  document.getElementById('owner-input').value = owner;
+  document.getElementById('repo-input').value  = repo;
+  if (pat) document.getElementById('pat-input').placeholder = '（設定済み）';
+
+  if (owner && repo && pat) {
+    document.getElementById('sync-now-btn').disabled = false;
+    showBanner('GitHubからデータを読み込み中...', '');
+    const ok = await fetchProgress();
+    ok ? hideBanner() : showBanner('GitHub同期に失敗しました — 設定を確認してください', 'error');
+  } else {
+    showBanner('⚙ 右上の設定ボタンからGitHub同期を設定すると、データが保存・同期されます', '');
+  }
+  renderTable();
+  updateProgressBar();
+  updateStickyTops();
+}
+
+init();
+  </script>
+</body>
+</html>
