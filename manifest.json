@@ -1,0 +1,22 @@
+{
+  "name": "日本百名山 進捗トラッカー",
+  "short_name": "百名山",
+  "description": "日本百名山の登頂進捗を管理するアプリ",
+  "start_url": "/100mountains-tracker/",
+  "display": "standalone",
+  "background_color": "#1b4332",
+  "theme_color": "#2d6a4f",
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
