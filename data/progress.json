@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-04-01T04:34:53.911Z",
+  "lastUpdated": "2026-04-01T04:34:56.475Z",
   "entries": {
     "18": {
       "climbed": true
@@ -39,6 +39,9 @@
       "climbed": true
     },
     "67": {
+      "climbed": true
+    },
+    "68": {
       "climbed": true
     }
   }
