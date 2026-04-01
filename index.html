@@ -16,10 +16,13 @@ body {
   color: #1a2e23;
   font-size: 14px;
   line-height: 1.5;
+  display: flex; flex-direction: column;
+  height: 100vh; height: 100dvh;
+  overflow: hidden;
 }
 
 header {
-  position: sticky; top: 0; z-index: 102;
+  flex-shrink: 0;
   background: #2d6a4f; color: #fff;
   box-shadow: 0 2px 6px rgba(0,0,0,.2);
 }
@@ -46,6 +49,7 @@ header h1 { font-size: 1.2rem; font-weight: 700; white-space: nowrap; }
 #sync-banner.hidden  { display: none; }
 
 #settings-panel {
+  flex-shrink: 0;
   background: #fff; border-bottom: 1px solid #d1d9d3;
   overflow: hidden; max-height: 0; transition: max-height .3s ease;
 }
@@ -76,7 +80,7 @@ header h1 { font-size: 1.2rem; font-weight: 700; white-space: nowrap; }
 #settings-status.err { color: #721c24; }
 
 #controls {
-  position: sticky; z-index: 101;
+  flex-shrink: 0;
   display: flex; align-items: center; gap: 12px;
   padding: 10px 16px; background: #fff;
   border-bottom: 1px solid #d1d9d3; flex-wrap: wrap;
@@ -91,11 +95,11 @@ header h1 { font-size: 1.2rem; font-weight: 700; white-space: nowrap; }
 .filter-check { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; cursor: pointer; white-space: nowrap; }
 .filter-check input[type="checkbox"] { width: 15px; height: 15px; accent-color: #2d6a4f; cursor: pointer; }
 
-#table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+#table-wrapper { flex: 1; overflow: auto; min-height: 0; -webkit-overflow-scrolling: touch; }
 #mountains-table { width: 100%; border-collapse: collapse; min-width: 600px; }
 #mountains-table thead {
   background: #fff; border-bottom: 2px solid #52b788;
-  position: sticky; z-index: 10;
+  position: sticky; top: 0; z-index: 10;
 }
 #mountains-table th {
   padding: 10px 8px; text-align: left; font-size: 0.8rem;
@@ -137,12 +141,40 @@ th[data-col].sort-desc::after { content: " ▼"; color: #2d6a4f; }
 
 #empty-state { text-align: center; padding: 40px; color: #6b8277; font-size: 0.9rem; }
 
-@media (max-width: 480px) {
-  .header-main { padding: 8px 12px; }
+/* ── Mobile ────────────────────────────────────────── */
+@media (max-width: 600px) {
+  body { font-size: 13px; }
+  .header-main { padding: 8px 12px; gap: 8px; }
   header h1 { font-size: 1rem; }
-  #progress-bar { width: 80px; }
+  #progress-bar { width: 70px; }
+  #progress-text { font-size: 0.75rem; }
+
+  #controls { padding: 8px 10px; gap: 8px; }
+  #search-input { font-size: 0.85rem; }
+
+  .settings-inner { padding: 14px; }
   .settings-actions { flex-direction: column; }
   .settings-actions button { width: 100%; }
+
+  /* テーブル: 標高・都道府県・登頂日を非表示にしてチェックボックスを見えやすく */
+  #mountains-table { min-width: unset; width: 100%; }
+  #mountains-table th:nth-child(3),
+  #mountains-table td:nth-child(3),
+  #mountains-table th:nth-child(4),
+  #mountains-table td:nth-child(4),
+  #mountains-table th:nth-child(7),
+  #mountains-table td:nth-child(7) { display: none; }
+
+  /* 表示列: # / 山名 / 難易度 / 登頂チェック */
+  #mountains-table th { padding: 8px 6px; font-size: 0.75rem; }
+  #mountains-table td { padding: 10px 6px; }
+  .td-name { font-size: 0.9rem; }
+
+  /* チェックボックスを大きくしてタップしやすく */
+  .climbed-check { width: 24px; height: 24px; }
+  .col-climbed { width: 48px; }
+  .col-id { width: 32px; }
+  .col-difficulty { width: 56px; }
 }
   </style>
 </head>
@@ -559,16 +591,6 @@ function hideBanner() { document.getElementById('sync-banner').classList.add('hi
 function setStatus(el, msg, cls) { el.textContent = msg; el.className = cls; }
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-// ─── Sticky offsets ───────────────────────────────────────────────────────────
-function updateStickyTops() {
-  const headerH   = document.querySelector('header').offsetHeight;
-  const controls  = document.getElementById('controls');
-  controls.style.top = headerH + 'px';
-  const controlsH = controls.offsetHeight;
-  document.querySelector('#mountains-table thead').style.top = (headerH + controlsH) + 'px';
-}
-window.addEventListener('resize', updateStickyTops);
-
 // ─── Init ─────────────────────────────────────────────────────────────────────
 async function init() {
   const owner = localStorage.getItem('gh_owner') || '';
@@ -588,7 +610,6 @@ async function init() {
   }
   renderTable();
   updateProgressBar();
-  updateStickyTops();
 }
 
 init();
