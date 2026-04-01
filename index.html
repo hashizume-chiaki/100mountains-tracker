@@ -104,7 +104,7 @@ header h1 { font-size: 1.2rem; font-weight: 700; white-space: nowrap; }
 .filter-check input[type="checkbox"] { width: 15px; height: 15px; accent-color: #2d6a4f; cursor: pointer; }
 
 #table-wrapper { flex: 1; overflow: auto; min-height: 0; -webkit-overflow-scrolling: touch; }
-#mountains-table { width: 100%; border-collapse: collapse; min-width: 600px; }
+#mountains-table { width: 100%; border-collapse: collapse; }
 #mountains-table thead {
   background: #fff; border-bottom: 2px solid #52b788;
   position: sticky; top: 0; z-index: 10;
@@ -118,18 +118,29 @@ th[data-col] { cursor: pointer; }
 th[data-col]:hover { color: #2d6a4f; }
 th[data-col].sort-asc::after  { content: " ▲"; color: #2d6a4f; }
 th[data-col].sort-desc::after { content: " ▼"; color: #2d6a4f; }
-.col-id { width: 44px; } .col-elevation { width: 88px; }
-.col-prefecture { width: 100px; } .col-difficulty { width: 72px; text-align: center; }
-.col-climbed { width: 52px; text-align: center; } .col-date { width: 130px; }
+.col-id { width: 40px; }
+.col-difficulty { width: 68px; text-align: center; }
+.col-climbed { width: 56px; text-align: center; }
 
-#mountains-table tbody tr { border-bottom: 1px solid #d1d9d3; background: #fff; }
-#mountains-table tbody tr:hover { background: #d8f3dc; }
-#mountains-table tbody tr.climbed { background: #edf7f0; }
-#mountains-table tbody tr.climbed:hover { background: #d8f0e3; }
+#mountains-table tbody tr.main-row { border-bottom: 1px solid #d1d9d3; background: #fff; cursor: pointer; }
+#mountains-table tbody tr.main-row:hover { background: #d8f3dc; }
+#mountains-table tbody tr.main-row.climbed { background: #edf7f0; }
+#mountains-table tbody tr.main-row.climbed:hover { background: #d8f0e3; }
+#mountains-table tbody tr.detail-row { background: #f9fbfa; border-bottom: 1px solid #d1d9d3; }
+#mountains-table tbody tr.detail-row.climbed { background: #f4fbf6; }
+#mountains-table tbody tr.detail-row.hidden { display: none; }
 #mountains-table td { padding: 8px; font-size: 0.88rem; color: #1a2e23; }
 .td-id { color: #6b8277; font-size: 0.8rem; }
 .td-name { font-weight: 500; }
+.td-name .expand-icon { float: right; font-size: 0.7rem; color: #9bb8a8; margin-top: 3px; }
 .td-center { text-align: center; }
+
+.detail-content {
+  display: flex; flex-wrap: wrap; gap: 6px 24px;
+  padding: 6px 8px 10px 32px; font-size: 0.83rem;
+}
+.detail-item { display: flex; align-items: center; gap: 6px; color: #1a2e23; }
+.detail-label { color: #6b8277; font-size: 0.78rem; font-weight: 600; white-space: nowrap; }
 
 .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.78rem; font-weight: 700; }
 .diff-A { background: #d4edda; color: #155724; }
@@ -164,25 +175,12 @@ th[data-col].sort-desc::after { content: " ▼"; color: #2d6a4f; }
   .settings-actions { flex-direction: column; }
   .settings-actions button { width: 100%; }
 
-  /* テーブル: 標高・都道府県・登頂日を非表示にしてチェックボックスを見えやすく */
-  #mountains-table { min-width: unset; width: 100%; }
-  #mountains-table th:nth-child(3),
-  #mountains-table td:nth-child(3),
-  #mountains-table th:nth-child(4),
-  #mountains-table td:nth-child(4),
-  #mountains-table th:nth-child(7),
-  #mountains-table td:nth-child(7) { display: none; }
-
-  /* 表示列: # / 山名 / 難易度 / 登頂チェック */
   #mountains-table th { padding: 8px 6px; font-size: 0.75rem; }
   #mountains-table td { padding: 10px 6px; }
-  .td-name { font-size: 0.9rem; }
-
-  /* チェックボックスを大きくしてタップしやすく */
   .climbed-check { width: 24px; height: 24px; }
   .col-climbed { width: 48px; }
   .col-id { width: 32px; }
-  .col-difficulty { width: 56px; }
+  .detail-content { padding-left: 16px; gap: 6px 16px; }
 }
   </style>
 </head>
@@ -236,11 +234,8 @@ th[data-col].sort-desc::after { content: " ▼"; color: #2d6a4f; }
         <tr>
           <th data-col="id" class="sort-asc col-id">#</th>
           <th data-col="name" class="col-name">山名</th>
-          <th data-col="elevation" class="col-elevation">標高 (m)</th>
-          <th data-col="prefecture" class="col-prefecture">都道府県</th>
           <th data-col="difficulty" class="col-difficulty">難易度</th>
           <th data-col="climbed" class="col-climbed">登頂</th>
-          <th data-col="date" class="col-date">登頂日</th>
         </tr>
       </thead>
       <tbody id="table-body"></tbody>
@@ -373,6 +368,7 @@ let filterText = '';
 let filterUnclimbed = false;
 let saveTimer = null;
 let isSaving = false;
+let expandedIds = new Set();
 
 // ─── GitHub API ───────────────────────────────────────────────────────────────
 const GH_API = 'https://api.github.com';
@@ -544,7 +540,7 @@ function renderTable() {
   const data = getSortedFiltered();
 
   if (data.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7"><div id="empty-state">該当する山がありません</div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4"><div id="empty-state">該当する山がありません</div></td></tr>';
     return;
   }
 
@@ -553,17 +549,29 @@ function renderTable() {
     const p = progress[m.id] || {};
     const climbed = !!p.climbed;
     const date = p.date || '';
+    const isExpanded = expandedIds.has(String(m.id));
+
+    // メイン行
     const tr = document.createElement('tr');
-    if (climbed) tr.className = 'climbed';
+    tr.className = 'main-row' + (climbed ? ' climbed' : '');
+    tr.dataset.id = String(m.id);
     tr.innerHTML =
       `<td class="td-id td-center">${m.id}</td>` +
-      `<td class="td-name">${esc(m.name)}</td>` +
-      `<td>${m.elevation.toLocaleString('ja-JP')}</td>` +
-      `<td>${esc(m.prefecture)}</td>` +
+      `<td class="td-name">${esc(m.name)}<span class="expand-icon">${isExpanded ? '▲' : '▼'}</span></td>` +
       `<td class="td-center"><span class="badge diff-${m.difficulty}">${m.difficulty}</span></td>` +
-      `<td class="td-center"><input type="checkbox" class="climbed-check" data-id="${m.id}"${climbed ? ' checked' : ''}></td>` +
-      `<td><input type="date" class="date-input" data-id="${m.id}" value="${esc(date)}"${!climbed ? ' disabled' : ''}></td>`;
+      `<td class="td-center"><input type="checkbox" class="climbed-check" data-id="${m.id}"${climbed ? ' checked' : ''}></td>`;
     frag.appendChild(tr);
+
+    // 詳細行（アコーディオン）
+    const detailTr = document.createElement('tr');
+    detailTr.className = 'detail-row' + (climbed ? ' climbed' : '') + (isExpanded ? '' : ' hidden');
+    detailTr.innerHTML =
+      `<td colspan="4"><div class="detail-content">` +
+      `<span class="detail-item"><span class="detail-label">標高</span>${m.elevation.toLocaleString('ja-JP')} m</span>` +
+      `<span class="detail-item"><span class="detail-label">都道府県</span>${esc(m.prefecture)}</span>` +
+      `<span class="detail-item"><span class="detail-label">登頂日</span><input type="date" class="date-input" data-id="${m.id}" value="${esc(date)}"${!climbed ? ' disabled' : ''}></span>` +
+      `</div></td>`;
+    frag.appendChild(detailTr);
   }
   tbody.innerHTML = '';
   tbody.appendChild(frag);
@@ -574,6 +582,19 @@ function updateProgressBar() {
   document.getElementById('progress-text').textContent = `登頂済み: ${done} / ${MOUNTAINS.length}`;
   document.getElementById('progress-fill').style.width = `${(done / MOUNTAINS.length * 100).toFixed(1)}%`;
 }
+
+document.getElementById('table-body').addEventListener('click', e => {
+  if (e.target.type === 'checkbox' || e.target.type === 'date') return;
+  const tr = e.target.closest('tr.main-row');
+  if (!tr) return;
+  const id = tr.dataset.id;
+  const detailRow = tr.nextElementSibling;
+  if (!detailRow || !detailRow.classList.contains('detail-row')) return;
+  const willExpand = detailRow.classList.contains('hidden');
+  detailRow.classList.toggle('hidden', !willExpand);
+  tr.querySelector('.expand-icon').textContent = willExpand ? '▲' : '▼';
+  if (willExpand) expandedIds.add(id); else expandedIds.delete(id);
+});
 
 document.getElementById('table-body').addEventListener('change', e => {
   const el = e.target;
