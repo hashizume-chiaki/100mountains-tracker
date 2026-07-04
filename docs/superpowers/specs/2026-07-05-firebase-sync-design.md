@@ -83,11 +83,14 @@ service cloud.firestore {
 
 ## 変更するファイル
 
+実装調査の結果、現行アプリは `index.html` 単一ファイル(CSS/JS/山データすべてインライン)で、
+`app.js` / `style.css` / `data/mountains.js` は index.html から参照されていない古い残骸と判明。
+
 | ファイル | 変更内容 |
 |---|---|
-| `app.js` | GitHub API層 → Firebase層に置き換え。認証状態管理を追加 |
-| `index.html` | 設定パネル削除、ログインボタン/アカウント表示を追加、SDK読み込み |
-| `style.css` | ログインボタン・アカウント表示のスタイル追加、設定パネルのスタイル削除 |
+| `index.html` | GitHub API層 → Firebase層に置き換え。設定パネル削除、ログインUI追加、SDK読み込み(インラインscriptをmoduleに変更) |
+| `app.js` / `style.css` / `data/mountains.js` | 未参照の残骸のため削除 |
+| `data/progress.json` | 移行ソースとして残す(書き込みは廃止) |
 
 ## UI状態
 
