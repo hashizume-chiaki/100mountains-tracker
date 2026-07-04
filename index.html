@@ -196,7 +196,7 @@ th[data-col].sort-desc::after { content: " ▼"; color: #2d6a4f; }
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js';
 import {
   getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect,
-  onAuthStateChanged, signOut
+  onAuthStateChanged, signOut, getRedirectResult
 } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js';
 import {
   initializeFirestore, persistentLocalCache,
@@ -343,7 +343,29 @@ let expandedIds = new Set();
 let user = null;          // Firebase User | null
 let unsubscribe = null;   // Firestoreリスナー解除関数
 
-async function saveProgress() {} // Task 5でFirestore実装に置き換える
+async function saveProgress() {
+  if (!user) return;
+  const payload = {
+    version: 2,
+    lastUpdated: serverTimestamp(),
+    entries: progress,
+  };
+  if (!navigator.onLine) {
+    // オフライン時: ローカルキャッシュに書き、復帰時にSDKが自動送信する
+    setDoc(doc(db, 'users', user.uid), payload);
+    showBanner('オフライン — 復帰時に自動同期します', '');
+    return;
+  }
+  try {
+    showBanner('同期中...', '');
+    await setDoc(doc(db, 'users', user.uid), payload);
+    showBanner('同期完了 ✓', 'success');
+    setTimeout(hideBanner, 2500);
+  } catch (e) {
+    console.error('saveProgress:', e);
+    showBanner(`同期失敗: ${e.message}`, 'error');
+  }
+}
 
 function scheduleAutoSave(delay = 800) {
   clearTimeout(saveTimer);
@@ -455,6 +477,12 @@ document.getElementById('table-body').addEventListener('click', e => {
 });
 
 document.getElementById('table-body').addEventListener('change', e => {
+  if (!user) {
+    showBanner('記録するにはログインしてください', 'error');
+    setTimeout(hideBanner, 2500);
+    renderTable(); // チェック状態を元に戻す
+    return;
+  }
   const el = e.target;
   const id = Number(el.dataset.id);
   if (!id) return;
@@ -476,6 +504,29 @@ function showBanner(msg, type) {
 }
 function hideBanner() { document.getElementById('sync-banner').classList.add('hidden'); }
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function subscribeProgress(uid) {
+  unsubscribe = onSnapshot(doc(db, 'users', uid), (snap) => {
+    if (snap.metadata.hasPendingWrites) return; // 自分の書き込みのエコーは無視(ちらつき防止)
+    if (!snap.exists()) return;
+    progress = snap.data().entries || {};
+    renderTable();
+    updateProgressBar();
+  }, (e) => {
+    console.error('subscribeProgress:', e);
+    showBanner(`同期エラー: ${e.message}`, 'error');
+  });
+}
+
+async function ensureUserDoc(uid) {
+  const ref = doc(db, 'users', uid);
+  const snap = await getDoc(ref);
+  if (snap.exists()) {
+    progress = snap.data().entries || {};
+    renderTable();
+    updateProgressBar();
+  }
+}
+
 function updateAuthUI() {
   const btn = document.getElementById('auth-btn');
   const avatar = document.getElementById('auth-avatar');
@@ -501,7 +552,11 @@ document.getElementById('auth-btn').addEventListener('click', async () => {
   } catch (e) {
     if (e.code === 'auth/popup-blocked' ||
         e.code === 'auth/operation-not-supported-in-this-environment') {
-      await signInWithRedirect(auth, provider);  // ポップアップ不可の環境向けフォールバック
+      try {
+        await signInWithRedirect(auth, provider);  // ポップアップ不可の環境向けフォールバック
+      } catch (e2) {
+        showBanner(`ログイン失敗: ${e2.message}`, 'error');
+      }
     } else if (e.code !== 'auth/popup-closed-by-user' &&
                e.code !== 'auth/cancelled-popup-request') {
       showBanner(`ログイン失敗: ${e.message}`, 'error');
@@ -510,15 +565,32 @@ document.getElementById('auth-btn').addEventListener('click', async () => {
 });
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
-onAuthStateChanged(auth, (u) => {
+onAuthStateChanged(auth, async (u) => {
   user = u;
   updateAuthUI();
-  if (!u) {
+  if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+  clearTimeout(saveTimer);
+  if (u) {
+    showBanner('データを読み込み中...', '');
+    try {
+      await ensureUserDoc(u.uid);
+      hideBanner();
+    } catch (e) {
+      console.error('ensureUserDoc:', e);
+      showBanner(`読み込み失敗: ${e.message}`, 'error');
+    }
+    subscribeProgress(u.uid);
+  } else {
     progress = {};
     renderTable();
     updateProgressBar();
     showBanner('Googleでログインすると記録が保存・同期されます', '');
   }
+});
+
+getRedirectResult(auth).catch(e => {
+  console.error('getRedirectResult:', e);
+  showBanner(`ログイン失敗: ${e.message}`, 'error');
 });
 
 renderTable();
