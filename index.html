@@ -192,7 +192,30 @@ th[data-col].sort-desc::after { content: " ▼"; color: #2d6a4f; }
     </table>
   </div>
 
-  <script>
+  <script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js';
+import {
+  getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect,
+  onAuthStateChanged, signOut
+} from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js';
+import {
+  initializeFirestore, persistentLocalCache,
+  doc, getDoc, setDoc, onSnapshot, serverTimestamp
+} from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA8Q4iMtO4UeIMYQZKCUpVbYoI3d4oNemw",
+  authDomain: "hyakumeizan-tracker.firebaseapp.com",
+  projectId: "hyakumeizan-tracker",
+  storageBucket: "hyakumeizan-tracker.firebasestorage.app",
+  messagingSenderId: "528587899493",
+  appId: "1:528587899493:web:07dc89702d6b0e1c2f3c8c"
+};
+
+const fbApp = initializeApp(firebaseConfig);
+const auth = getAuth(fbApp);
+const db = initializeFirestore(fbApp, { localCache: persistentLocalCache() });
+
 // ─── Mountain Data ────────────────────────────────────────────────────────────
 const MOUNTAINS = [
   // 北海道
@@ -317,6 +340,8 @@ let filterText = '';
 let filterUnclimbed = false;
 let saveTimer = null;
 let expandedIds = new Set();
+let user = null;          // Firebase User | null
+let unsubscribe = null;   // Firestoreリスナー解除関数
 
 async function saveProgress() {} // Task 5でFirestore実装に置き換える
 
@@ -451,14 +476,53 @@ function showBanner(msg, type) {
 }
 function hideBanner() { document.getElementById('sync-banner').classList.add('hidden'); }
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-
-// ─── Init ─────────────────────────────────────────────────────────────────────
-function init() {
-  renderTable();
-  updateProgressBar();
+function updateAuthUI() {
+  const btn = document.getElementById('auth-btn');
+  const avatar = document.getElementById('auth-avatar');
+  if (user) {
+    btn.textContent = 'ログアウト';
+    if (user.photoURL) { avatar.src = user.photoURL; avatar.classList.remove('hidden'); }
+  } else {
+    btn.textContent = 'ログイン';
+    avatar.classList.add('hidden');
+    avatar.removeAttribute('src');
+  }
 }
 
-init();
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+document.getElementById('auth-btn').addEventListener('click', async () => {
+  if (user) {
+    if (confirm('ログアウトしますか?')) await signOut(auth);
+    return;
+  }
+  const provider = new GoogleAuthProvider();
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (e) {
+    if (e.code === 'auth/popup-blocked' ||
+        e.code === 'auth/operation-not-supported-in-this-environment') {
+      await signInWithRedirect(auth, provider);  // ポップアップ不可の環境向けフォールバック
+    } else if (e.code !== 'auth/popup-closed-by-user' &&
+               e.code !== 'auth/cancelled-popup-request') {
+      showBanner(`ログイン失敗: ${e.message}`, 'error');
+    }
+  }
+});
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+onAuthStateChanged(auth, (u) => {
+  user = u;
+  updateAuthUI();
+  if (!u) {
+    progress = {};
+    renderTable();
+    updateProgressBar();
+    showBanner('Googleでログインすると記録が保存・同期されます', '');
+  }
+});
+
+renderTable();
+updateProgressBar();
   </script>
 </body>
 </html>
