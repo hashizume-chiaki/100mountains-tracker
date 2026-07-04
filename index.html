@@ -44,48 +44,20 @@ header h1 { font-size: 1.2rem; font-weight: 700; white-space: nowrap; }
 #progress-text { font-size: 0.8rem; opacity: .9; white-space: nowrap; }
 #progress-bar { width: 120px; height: 6px; background: rgba(255,255,255,.3); border-radius: 3px; overflow: hidden; }
 #progress-fill { height: 100%; background: #52b788; border-radius: 3px; transition: width .4s ease; }
-.icon-btn {
+#auth-area { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+#auth-avatar { width: 30px; height: 30px; border-radius: 50%; border: 2px solid rgba(255,255,255,.6); }
+#auth-avatar.hidden { display: none; }
+.auth-btn {
   background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.3);
-  color: #fff; border-radius: 6px; width: 36px; height: 36px;
-  font-size: 1rem; cursor: pointer; flex-shrink: 0;
+  color: #fff; border-radius: 6px; padding: 7px 12px;
+  font-size: 0.82rem; font-weight: 600; cursor: pointer; white-space: nowrap;
 }
-.icon-btn:hover { background: rgba(255,255,255,.25); }
+.auth-btn:hover { background: rgba(255,255,255,.25); }
 
 #sync-banner { padding: 6px 16px; font-size: 0.8rem; text-align: center; background: rgba(0,0,0,.2); color: #fff; }
 #sync-banner.error   { background: #c0392b; }
 #sync-banner.success { background: #27ae60; }
 #sync-banner.hidden  { display: none; }
-
-#settings-panel {
-  flex-shrink: 0;
-  background: #fff; border-bottom: 1px solid #d1d9d3;
-  overflow: hidden; max-height: 0; transition: max-height .3s ease;
-}
-#settings-panel.visible { max-height: 600px; }
-#settings-panel.hidden  { display: block; }
-.settings-inner { padding: 20px; max-width: 560px; }
-.settings-inner h2 { font-size: 1rem; margin-bottom: 8px; color: #2d6a4f; }
-.settings-note { font-size: 0.82rem; color: #6b8277; margin-bottom: 16px; line-height: 1.6; }
-.settings-fields { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
-.settings-fields label { display: flex; flex-direction: column; gap: 4px; font-size: 0.82rem; font-weight: 600; color: #1a2e23; }
-.settings-fields input {
-  padding: 7px 10px; border: 1px solid #d1d9d3; border-radius: 6px;
-  font-size: 0.9rem; width: 100%; background: #fff; color: #1a2e23;
-}
-.settings-fields input:focus { outline: none; border-color: #52b788; }
-.settings-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.settings-actions button {
-  padding: 7px 14px; border-radius: 6px; border: none;
-  cursor: pointer; font-size: 0.85rem; font-weight: 600;
-  background: #2d6a4f; color: #fff;
-}
-.settings-actions button:disabled { opacity: .45; cursor: default; }
-.settings-actions button:not(:disabled):hover { opacity: .85; }
-.settings-actions button.secondary { background: #f4f7f5; color: #1a2e23; border: 1px solid #d1d9d3; }
-.settings-actions button.secondary:hover { background: #d1d9d3; }
-#settings-status { margin-top: 10px; font-size: 0.82rem; min-height: 18px; }
-#settings-status.ok  { color: #155724; }
-#settings-status.err { color: #721c24; }
 
 #controls {
   flex-shrink: 0;
@@ -171,10 +143,6 @@ th[data-col].sort-desc::after { content: " ▼"; color: #2d6a4f; }
   #controls { padding: 8px 10px; gap: 8px; }
   #search-input { font-size: 0.85rem; }
 
-  .settings-inner { padding: 14px; }
-  .settings-actions { flex-direction: column; }
-  .settings-actions button { width: 100%; }
-
   #mountains-table th { padding: 8px 6px; font-size: 0.75rem; }
   #mountains-table td { padding: 10px 6px; }
   .climbed-check { width: 24px; height: 24px; }
@@ -194,7 +162,10 @@ th[data-col].sort-desc::after { content: " ▼"; color: #2d6a4f; }
           <span id="progress-text">登頂済み: 0 / 100</span>
           <div id="progress-bar"><div id="progress-fill" style="width:0%"></div></div>
         </div>
-        <button id="settings-btn" class="icon-btn" title="同期設定">⚙</button>
+        <div id="auth-area">
+          <img id="auth-avatar" class="hidden" alt="" referrerpolicy="no-referrer">
+          <button id="auth-btn" class="auth-btn">ログイン</button>
+        </div>
       </div>
     </div>
     <div id="sync-banner" class="hidden"></div>
@@ -205,27 +176,6 @@ th[data-col].sort-desc::after { content: " ▼"; color: #2d6a4f; }
       <input type="checkbox" id="filter-unclimbed">
       <span>未登頂のみ表示</span>
     </label>
-  </div>
-
-  <div id="settings-panel" class="hidden">
-    <div class="settings-inner">
-      <h2>GitHub 同期設定</h2>
-      <p class="settings-note">
-        データをGitHubリポジトリに保存して、異なる端末間で同期します。<br>
-        <strong>contents: write</strong> 権限を持つ fine-grained Personal Access Token が必要です。
-      </p>
-      <div class="settings-fields">
-        <label><span>GitHubユーザー名</span><input type="text" id="owner-input" placeholder="your-github-username" autocomplete="off"></label>
-        <label><span>リポジトリ名</span><input type="text" id="repo-input" placeholder="hyakumeizan-tracker" autocomplete="off"></label>
-        <label><span>Personal Access Token</span><input type="password" id="pat-input" placeholder="github_pat_..." autocomplete="off"></label>
-      </div>
-      <div class="settings-actions">
-        <button id="save-settings-btn">保存して接続テスト</button>
-        <button id="sync-now-btn" disabled>今すぐ同期</button>
-        <button id="close-settings-btn" class="secondary">閉じる</button>
-      </div>
-      <div id="settings-status"></div>
-    </div>
   </div>
 
   <div id="table-wrapper">
@@ -362,135 +312,18 @@ const MOUNTAINS = [
 
 // ─── State ───────────────────────────────────────────────────────────────────
 let progress = {};
-let currentSha = null;
 let sortState = { col: 'id', dir: 'asc' };
 let filterText = '';
 let filterUnclimbed = false;
 let saveTimer = null;
-let isSaving = false;
 let expandedIds = new Set();
 
-// ─── GitHub API ───────────────────────────────────────────────────────────────
-const GH_API = 'https://api.github.com';
-
-function ghConfig() {
-  return {
-    pat:   localStorage.getItem('gh_pat')   || '',
-    owner: localStorage.getItem('gh_owner') || '',
-    repo:  localStorage.getItem('gh_repo')  || '',
-    path:  'data/progress.json',
-  };
-}
-
-function ghHeaders(cfg) {
-  return {
-    'Authorization': `Bearer ${cfg.pat}`,
-    'Accept': 'application/vnd.github+json',
-    'X-GitHub-Api-Version': '2022-11-28',
-    'Content-Type': 'application/json',
-  };
-}
-
-async function fetchProgress() {
-  const cfg = ghConfig();
-  if (!cfg.pat || !cfg.owner || !cfg.repo) return false;
-  const url = `${GH_API}/repos/${cfg.owner}/${cfg.repo}/contents/${cfg.path}`;
-  try {
-    const res = await fetch(url, { headers: ghHeaders(cfg) });
-    if (res.status === 404) { currentSha = null; return true; }
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    currentSha = data.sha;
-    const json = JSON.parse(decodeURIComponent(escape(atob(data.content.replace(/\n/g, '')))));
-    progress = json.entries || {};
-    return true;
-  } catch (e) {
-    console.error('fetchProgress:', e);
-    return false;
-  }
-}
-
-async function saveProgress() {
-  const cfg = ghConfig();
-  if (!cfg.pat || !cfg.owner || !cfg.repo) return;
-  if (isSaving) { scheduleAutoSave(200); return; }
-  isSaving = true;
-  showBanner('同期中...', '');
-  const payload = { version: 1, lastUpdated: new Date().toISOString(), entries: progress };
-  const content = btoa(unescape(encodeURIComponent(JSON.stringify(payload, null, 2))));
-  const body = { message: 'chore: update climbing progress [skip ci]', content, ...(currentSha ? { sha: currentSha } : {}) };
-  const url = `${GH_API}/repos/${cfg.owner}/${cfg.repo}/contents/${cfg.path}`;
-  try {
-    const res = await fetch(url, { method: 'PUT', headers: ghHeaders(cfg), body: JSON.stringify(body) });
-    if (res.status === 409) { await fetchProgress(); isSaving = false; scheduleAutoSave(100); return; }
-    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || `HTTP ${res.status}`); }
-    const result = await res.json();
-    currentSha = result.content.sha;
-    showBanner('同期完了 ✓', 'success');
-    setTimeout(hideBanner, 2500);
-  } catch (e) {
-    console.error('saveProgress:', e);
-    showBanner(`同期失敗: ${e.message}`, 'error');
-  } finally {
-    isSaving = false;
-  }
-}
+async function saveProgress() {} // Task 5でFirestore実装に置き換える
 
 function scheduleAutoSave(delay = 800) {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(saveProgress, delay);
 }
-
-// ─── Settings ─────────────────────────────────────────────────────────────────
-async function testConnection() {
-  const cfg = ghConfig();
-  if (!cfg.pat || !cfg.owner || !cfg.repo) return false;
-  try {
-    const res = await fetch(`${GH_API}/repos/${cfg.owner}/${cfg.repo}`, { headers: ghHeaders(cfg) });
-    return res.ok;
-  } catch { return false; }
-}
-
-document.getElementById('save-settings-btn').addEventListener('click', async () => {
-  const owner = document.getElementById('owner-input').value.trim();
-  const repo  = document.getElementById('repo-input').value.trim();
-  const pat   = document.getElementById('pat-input').value.trim();
-  const statusEl = document.getElementById('settings-status');
-  if (!owner || !repo || !pat) { setStatus(statusEl, '全てのフィールドを入力してください', 'err'); return; }
-  localStorage.setItem('gh_owner', owner);
-  localStorage.setItem('gh_repo', repo);
-  localStorage.setItem('gh_pat', pat);
-  setStatus(statusEl, '接続テスト中...', '');
-  document.getElementById('save-settings-btn').disabled = true;
-  const ok = await testConnection();
-  document.getElementById('save-settings-btn').disabled = false;
-  if (ok) {
-    setStatus(statusEl, '接続成功 ✓ データを読み込んでいます...', 'ok');
-    document.getElementById('sync-now-btn').disabled = false;
-    const fetched = await fetchProgress();
-    setStatus(statusEl, fetched ? '接続成功 ✓ データを読み込みました' : '接続成功 ✓（データファイルはまだありません）', 'ok');
-    renderTable(); updateProgressBar();
-  } else {
-    setStatus(statusEl, '接続失敗 — ユーザー名・リポジトリ名・Tokenを確認してください', 'err');
-    document.getElementById('sync-now-btn').disabled = true;
-  }
-});
-
-document.getElementById('sync-now-btn').addEventListener('click', async () => {
-  const ok = await fetchProgress();
-  if (ok) { renderTable(); updateProgressBar(); showBanner('同期完了 ✓', 'success'); setTimeout(hideBanner, 2500); }
-  else showBanner('同期失敗', 'error');
-});
-
-document.getElementById('settings-btn').addEventListener('click', () => {
-  const p = document.getElementById('settings-panel');
-  p.classList.toggle('visible');
-  p.classList.remove('hidden');
-});
-
-document.getElementById('close-settings-btn').addEventListener('click', () => {
-  document.getElementById('settings-panel').classList.remove('visible');
-});
 
 // ─── Sort / Filter ────────────────────────────────────────────────────────────
 const COMPARATORS = {
@@ -617,26 +450,10 @@ function showBanner(msg, type) {
   b.textContent = msg; b.className = type || ''; b.classList.remove('hidden');
 }
 function hideBanner() { document.getElementById('sync-banner').classList.add('hidden'); }
-function setStatus(el, msg, cls) { el.textContent = msg; el.className = cls; }
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
-async function init() {
-  const owner = localStorage.getItem('gh_owner') || '';
-  const repo  = localStorage.getItem('gh_repo')  || '';
-  const pat   = localStorage.getItem('gh_pat')   || '';
-  document.getElementById('owner-input').value = owner;
-  document.getElementById('repo-input').value  = repo;
-  if (pat) document.getElementById('pat-input').placeholder = '（設定済み）';
-
-  if (owner && repo && pat) {
-    document.getElementById('sync-now-btn').disabled = false;
-    showBanner('GitHubからデータを読み込み中...', '');
-    const ok = await fetchProgress();
-    ok ? hideBanner() : showBanner('GitHub同期に失敗しました — 設定を確認してください', 'error');
-  } else {
-    showBanner('⚙ 右上の設定ボタンからGitHub同期を設定すると、データが保存・同期されます', '');
-  }
+function init() {
   renderTable();
   updateProgressBar();
 }
