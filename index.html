@@ -517,37 +517,31 @@ function subscribeProgress(uid) {
   });
 }
 
-async function ensureUserDoc(uid) {
+// Firestoreから読み込み、初回はprogress.jsonから移行。UIへの適用は呼び出し元で行う
+async function loadOrMigrateProgress(uid) {
   const ref = doc(db, 'users', uid);
   const snap = await getDoc(ref);
   if (snap.exists()) {
-    progress = snap.data().entries || {};
-    renderTable();
-    updateProgressBar();
-    return;
+    return { entries: snap.data().entries || {}, migrated: false, fetchFailed: false };
   }
   // 初回ログイン: 旧progress.jsonから移行
   let entries = {};
   let migrated = false;
+  let fetchFailed = false;
   try {
     const res = await fetch('data/progress.json');
     if (res.ok) {
       entries = (await res.json()).entries || {};
       migrated = Object.keys(entries).length > 0;
+    } else {
+      fetchFailed = true;
     }
   } catch (e) {
     console.warn('移行データの読み込みに失敗(空データで開始):', e);
-    showBanner('以前の記録の読み込みに失敗しました — 空の状態で開始します', 'error');
-    setTimeout(hideBanner, 4000);
+    fetchFailed = true;
   }
   await setDoc(ref, { version: 2, lastUpdated: serverTimestamp(), entries });
-  progress = entries;
-  renderTable();
-  updateProgressBar();
-  if (migrated) {
-    showBanner('既存の記録を移行しました ✓', 'success');
-    setTimeout(hideBanner, 3000);
-  }
+  return { entries, migrated, fetchFailed };
 }
 
 function updateAuthUI() {
@@ -596,12 +590,23 @@ onAuthStateChanged(auth, async (u) => {
   if (u) {
     showBanner('データを読み込み中...', '');
     try {
-      await ensureUserDoc(u.uid);
+      const { entries, migrated, fetchFailed } = await loadOrMigrateProgress(u.uid);
       if (user !== u) return; // ロード中にログアウト/ユーザー切替した場合は破棄
-      hideBanner();
+      progress = entries;
+      renderTable();
+      updateProgressBar();
+      if (fetchFailed) {
+        showBanner('以前の記録の読み込みに失敗しました — 空の状態で開始します', 'error');
+        setTimeout(hideBanner, 4000);
+      } else if (migrated) {
+        showBanner('既存の記録を移行しました ✓', 'success');
+        setTimeout(hideBanner, 3000);
+      } else {
+        hideBanner();
+      }
     } catch (e) {
       if (user !== u) return;
-      console.error('ensureUserDoc:', e);
+      console.error('loadOrMigrateProgress:', e);
       showBanner(`読み込み失敗: ${e.message}`, 'error');
     }
     if (user !== u) return;
