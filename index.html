@@ -540,7 +540,10 @@ async function loadOrMigrateProgress(uid) {
     console.warn('移行データの読み込みに失敗(空データで開始):', e);
     fetchFailed = true;
   }
-  await setDoc(ref, { version: 2, lastUpdated: serverTimestamp(), entries });
+  // 移行データを読めなかった場合はドキュメントを作らず、次回ログインで再試行できるようにする
+  if (!fetchFailed) {
+    await setDoc(ref, { version: 2, lastUpdated: serverTimestamp(), entries });
+  }
   return { entries, migrated, fetchFailed };
 }
 
@@ -560,7 +563,12 @@ function updateAuthUI() {
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 document.getElementById('auth-btn').addEventListener('click', async () => {
   if (user) {
-    if (confirm('ログアウトしますか?')) await signOut(auth);
+    if (confirm('ログアウトしますか?')) {
+      // 保存待ちの変更があれば先に書き切ってからログアウトする
+      clearTimeout(saveTimer);
+      await saveProgress();
+      await signOut(auth);
+    }
     return;
   }
   const provider = new GoogleAuthProvider();
