@@ -74,6 +74,13 @@ header h1 { font-size: 1.2rem; font-weight: 700; white-space: nowrap; }
 #search-input:focus { outline: none; border-color: #52b788; }
 .filter-check { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; cursor: pointer; white-space: nowrap; }
 .filter-check input[type="checkbox"] { width: 15px; height: 15px; accent-color: #2d6a4f; cursor: pointer; }
+.share-btn {
+  margin-left: auto; padding: 6px 10px;
+  border: 1px solid #d1d9d3; border-radius: 6px; background: #fff;
+  color: #2d6a4f; font-size: 0.8rem; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.share-btn:hover { background: #d8f3dc; }
+.share-btn.hidden { display: none; }
 
 #table-wrapper { flex: 1; overflow: auto; min-height: 0; -webkit-overflow-scrolling: touch; }
 #mountains-table { width: 100%; border-collapse: collapse; }
@@ -176,6 +183,7 @@ th[data-col].sort-desc::after { content: " ▼"; color: #2d6a4f; }
       <input type="checkbox" id="filter-unclimbed">
       <span>未登頂のみ表示</span>
     </label>
+    <button id="share-btn" class="share-btn hidden" type="button" title="登頂済みの山を読み取り専用で公開しているURLをコピーします">公開URLをコピー</button>
   </div>
 
   <div id="table-wrapper">
@@ -343,6 +351,33 @@ let expandedIds = new Set();
 let user = null;          // Firebase User | null
 let unsubscribe = null;   // Firestoreリスナー解除関数
 
+// ─── 公開用コピー ─────────────────────────────────────────────────────────────
+// 登頂済みの山だけを、誰でも読めるドキュメント publicProgress/{uid} に書き出す。
+// Claude などの外部ツールが REST API で最新の登頂状況を読むためのもの。
+// 書き込めるのは本人だけ(firestore.rules を参照)。フィールドを増やすときはルールも直す。
+const PUBLIC_COLLECTION = 'publicProgress';
+
+function buildPublicPayload(entries) {
+  const climbed = MOUNTAINS
+    .filter(m => entries[m.id]?.climbed)
+    .map(m => ({ id: m.id, name: m.name, date: entries[m.id].date || null }));
+  const unclimbed = MOUNTAINS.filter(m => !entries[m.id]?.climbed);
+  return {
+    version: 1,
+    updatedAt: serverTimestamp(),
+    total: MOUNTAINS.length,
+    climbedCount: climbed.length,
+    climbed,
+    climbedText: climbed.map(c => `${c.id} ${c.name}${c.date ? ` (${c.date})` : ''}`).join('\n'),
+    unclimbedText: unclimbed.map(m => `${m.id} ${m.name}`).join('\n'),
+  };
+}
+
+function publicUrl(uid) {
+  return `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}` +
+    `/databases/(default)/documents/${PUBLIC_COLLECTION}/${uid}`;
+}
+
 async function saveProgress() {
   if (!user) return;
   const payload = {
@@ -350,20 +385,31 @@ async function saveProgress() {
     lastUpdated: serverTimestamp(),
     entries: progress,
   };
+  const publicPayload = buildPublicPayload(progress);
+  const privateRef = doc(db, 'users', user.uid);
+  const publicRef = doc(db, PUBLIC_COLLECTION, user.uid);
   if (!navigator.onLine) {
     // オフライン時: ローカルキャッシュに書き、復帰時にSDKが自動送信する
-    setDoc(doc(db, 'users', user.uid), payload).catch(e => console.warn('offline save:', e));
+    setDoc(privateRef, payload).catch(e => console.warn('offline save:', e));
+    setDoc(publicRef, publicPayload).catch(e => console.warn('offline public save:', e));
     showBanner('オフライン — 復帰時に自動同期します', '');
     return;
   }
   try {
     showBanner('同期中...', '');
-    await setDoc(doc(db, 'users', user.uid), payload);
-    showBanner('同期完了 ✓', 'success');
-    setTimeout(hideBanner, 2500);
+    await setDoc(privateRef, payload);
   } catch (e) {
     console.error('saveProgress:', e);
     showBanner(`同期失敗: ${e.message}`, 'error');
+    return;
+  }
+  try {
+    await setDoc(publicRef, publicPayload);
+    showBanner('同期完了 ✓', 'success');
+    setTimeout(hideBanner, 2500);
+  } catch (e) {
+    console.error('publicProgress:', e);
+    showBanner(`記録は保存しましたが、公開用コピーの更新に失敗しました: ${e.message}`, 'error');
   }
 }
 
@@ -550,6 +596,7 @@ async function loadOrMigrateProgress(uid) {
 function updateAuthUI() {
   const btn = document.getElementById('auth-btn');
   const avatar = document.getElementById('auth-avatar');
+  document.getElementById('share-btn').classList.toggle('hidden', !user);
   if (user) {
     btn.textContent = 'ログアウト';
     if (user.photoURL) { avatar.src = user.photoURL; avatar.classList.remove('hidden'); }
@@ -589,6 +636,18 @@ document.getElementById('auth-btn').addEventListener('click', async () => {
   }
 });
 
+document.getElementById('share-btn').addEventListener('click', async () => {
+  if (!user) return;
+  const url = publicUrl(user.uid);
+  try {
+    await navigator.clipboard.writeText(url);
+    showBanner('公開URLをコピーしました ✓', 'success');
+    setTimeout(hideBanner, 2500);
+  } catch (e) {
+    prompt('公開URL(読み取り専用)', url); // クリップボードが使えない環境では手でコピーしてもらう
+  }
+});
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 onAuthStateChanged(auth, async (u) => {
   user = u;
@@ -603,6 +662,12 @@ onAuthStateChanged(auth, async (u) => {
       progress = entries;
       renderTable();
       updateProgressBar();
+      // 公開用コピーを最新にそろえる(初回作成も兼ねる)。移行に失敗して空のときは
+      // 既存の公開用コピーを空で上書きしないよう書かない
+      if (!fetchFailed) {
+        setDoc(doc(db, PUBLIC_COLLECTION, u.uid), buildPublicPayload(entries))
+          .catch(e => console.warn('publicProgress (login):', e));
+      }
       if (fetchFailed) {
         showBanner('以前の記録の読み込みに失敗しました — 空の状態で開始します', 'error');
         setTimeout(hideBanner, 4000);
